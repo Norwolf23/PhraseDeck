@@ -41,7 +41,8 @@ enum NotesImport {
             let bodies = d.atIndex(2).map(strings) ?? []
             for (name, body) in zip(names, bodies) {
                 let language = name.trimmingCharacters(in: .whitespaces)
-                for line in body.split(whereSeparator: \.isNewline) {
+                // First plaintext line is the note title — never a card.
+                for line in body.split(whereSeparator: \.isNewline).dropFirst() {
                     if let card = parseLine(String(line), language: language) { out.append(card) }
                 }
             }
