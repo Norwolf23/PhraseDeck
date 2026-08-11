@@ -54,7 +54,7 @@ enum NotesImport {
     /// bare "-" only when spaced so hyphenated words survive.
     static func parseLine(_ line: String, language: String) -> Card? {
         let t = line.trimmingCharacters(in: .whitespaces)
-        for sep in [" – ", " — ", " - ", " : ", "–", "—"] {
+        for sep in [" – ", " — ", " - ", " : ", " = ", "–", "—", "="] {
             guard let r = t.range(of: sep) else { continue }
             let phrase = t[..<r.lowerBound].trimmingCharacters(in: .whitespaces)
             let translation = t[r.upperBound...].trimmingCharacters(in: .whitespaces)
