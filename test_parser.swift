@@ -20,6 +20,13 @@ struct TestParser {
 
         check(NotesImport.parseLine("just a sentence line", language: "Spanish") == nil, "plain line rejected")
 
+        let d = NotesImport.parseLine("Cute = süßi", language: "Südtirolerisch")
+        check(d?.phrase == "Cute" && d?.translation == "süßi", "equals split")
+
+        let e1 = Card(language: "it", phrase: "Are you", translation: "Stai", confidence: .unrated)
+        let e2 = Card(language: "it", phrase: "Are you", translation: "Sei", confidence: .unrated)
+        check(e1.id != e2.id, "same phrase, different translation = distinct cards")
+
         let low = Card(language: "es", phrase: "l", translation: "x", confidence: .low)
         let high = Card(language: "es", phrase: "h", translation: "x", confidence: .high)
         var lowCount = 0

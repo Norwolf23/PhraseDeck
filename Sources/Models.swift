@@ -8,7 +8,8 @@ struct Card: Codable, Identifiable, Hashable {
     var phrase: String
     var translation: String
     var confidence: Confidence = .unrated
-    var id: String { language + "|" + phrase }
+    // Translation included so same phrase with different answers stays two cards.
+    var id: String { language + "|" + phrase + "|" + translation }
 }
 
 final class Store: ObservableObject {
