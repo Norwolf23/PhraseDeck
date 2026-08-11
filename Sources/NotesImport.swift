@@ -24,16 +24,25 @@ enum NotesImport {
         strings(try run(#"tell application "Notes" to get name of folders"#))
     }
 
+    /// Each note is a language deck: note title = language name.
     static func fetchCards(folders: [String]) throws -> [Card] {
         var out: [Card] = []
         for folder in folders {
             let escaped = folder
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "\"", with: "\\\"")
-            let d = try run("tell application \"Notes\" to get plaintext of every note of folder \"\(escaped)\"")
-            for body in strings(d) {
+            let d = try run("""
+            tell application "Notes"
+                set f to folder "\(escaped)"
+                get {name of every note of f, plaintext of every note of f}
+            end tell
+            """)
+            let names = d.atIndex(1).map(strings) ?? []
+            let bodies = d.atIndex(2).map(strings) ?? []
+            for (name, body) in zip(names, bodies) {
+                let language = name.trimmingCharacters(in: .whitespaces)
                 for line in body.split(whereSeparator: \.isNewline) {
-                    if let card = parseLine(String(line), language: folder) { out.append(card) }
+                    if let card = parseLine(String(line), language: language) { out.append(card) }
                 }
             }
         }

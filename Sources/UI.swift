@@ -75,12 +75,6 @@ struct SessionView: View {
         }
     }
 
-    private func rateButton(_ title: String, _ c: Confidence, _ tint: Color) -> some View {
-        Button(title) { rate(c) }
-            .buttonStyle(.borderedProminent)
-            .tint(tint)
-    }
-
     var body: some View {
         VStack(spacing: 16) {
             HStack {
@@ -100,11 +94,7 @@ struct SessionView: View {
                     .transition(.asymmetric(
                         insertion: .move(edge: .trailing).combined(with: .opacity),
                         removal: .move(edge: .leading).combined(with: .opacity)))
-                HStack(spacing: 12) {
-                    rateButton("Not confident", .low, Color(red: 0.91, green: 0.42, blue: 0.42))
-                    rateButton("So-so", .medium, Color(red: 0.93, green: 0.76, blue: 0.30))
-                    rateButton("Confident", .high, Color(red: 0.36, green: 0.72, blue: 0.44))
-                }
+                RatingBar(onRate: rate)
             } else {
                 Text("No cards to review").foregroundStyle(.secondary).padding(40)
             }
@@ -113,11 +103,123 @@ struct SessionView: View {
     }
 }
 
-// MARK: - PilesView
+// MARK: - RatingBar
 
-struct PilesView: View {
+struct RatingBar: View {
+    let onRate: (Confidence) -> Void
+
+    private func button(_ title: String, _ c: Confidence, _ tint: Color) -> some View {
+        Button(title) { onRate(c) }
+            .buttonStyle(.borderedProminent)
+            .tint(tint)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            button("Not confident", .low, Color(red: 0.91, green: 0.42, blue: 0.42))
+            button("So-so", .medium, Color(red: 0.93, green: 0.76, blue: 0.30))
+            button("Confident", .high, Color(red: 0.36, green: 0.72, blue: 0.44))
+        }
+    }
+}
+
+private func pool(_ language: String?) -> [Card] {
+    guard let language else { return Store.shared.cards }
+    return Store.shared.cards.filter { $0.language == language }
+}
+
+// MARK: - SessionLauncherView (choose a language, then 5 cards)
+
+struct SessionLauncherView: View {
+    let onDone: () -> Void
+    @State private var cards: [Card]?
+
+    var body: some View {
+        if let cards {
+            SessionView(cards: cards, onDone: onDone)
+        } else {
+            VStack(spacing: 10) {
+                Text("Which language?").font(.headline).padding(.bottom, 4)
+                ForEach(Store.shared.languages, id: \.self) { lang in
+                    Button { start(lang) } label: { Text(lang).frame(maxWidth: .infinity) }
+                        .buttonStyle(.borderedProminent)
+                }
+                Button { start(nil) } label: { Text("Mix them all").frame(maxWidth: .infinity) }
+                Button("Not now", action: onDone)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .keyboardShortcut(.cancelAction)
+                    .padding(.top, 4)
+            }
+            .padding(24)
+            .frame(width: 260)
+            .onAppear { if Store.shared.languages.count < 2 { start(nil) } }
+        }
+    }
+
+    private func start(_ lang: String?) {
+        cards = Store.weightedPick(from: pool(lang), count: 5)
+    }
+}
+
+// MARK: - EndlessView (keeps drawing weighted cards until closed)
+
+struct EndlessView: View {
+    let language: String?
+    let onDone: () -> Void
+    @State private var card: Card?
+    @State private var frontIsPhrase = false
+    @State private var flipped = false
+    @State private var seen = 0
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("\(seen) reviewed").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button(action: onDone) {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+            }
+            if let card {
+                CardView(card: card, frontIsPhrase: frontIsPhrase, flipped: $flipped)
+                    .id("\(seen)|\(card.id)")
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)))
+                RatingBar { c in
+                    Store.shared.rate(card, c)
+                    seen += 1
+                    withAnimation(.easeInOut(duration: 0.3)) { draw() }
+                }
+            } else {
+                Text("No cards here yet").foregroundStyle(.secondary).padding(40)
+            }
+        }
+        .padding(20)
+        .onAppear { draw() }
+    }
+
+    /// Weighted single draw; never shows the same card twice in a row.
+    private func draw() {
+        var p = pool(language)
+        if p.count > 1, let cur = card { p.removeAll { $0.id == cur.id } }
+        flipped = false
+        frontIsPhrase = Bool.random()
+        card = Store.weightedPick(from: p, count: 1).first
+    }
+}
+
+// MARK: - HomeView (piles per language + review buttons)
+
+struct HomeView: View {
+    let onSync: () -> Void
     @ObservedObject private var store = Store.shared
-    @State private var reviewing: [Card]?
+
+    private enum Mode { case browse, cards([Card]), endless(String?) }
+    @State private var mode: Mode = .browse
 
     private static let piles: [(String, Confidence, Color)] = [
         ("High", .high, .green), ("Medium", .medium, .yellow),
@@ -126,7 +228,7 @@ struct PilesView: View {
 
     private func chip(_ lang: String, _ label: String, _ c: Confidence, _ tint: Color) -> some View {
         let pile = store.cards(language: lang, confidence: c)
-        return Button { reviewing = pile } label: {
+        return Button { mode = .cards(pile.shuffled()) } label: {
             VStack(spacing: 2) {
                 Text("\(pile.count)").font(.title3.bold())
                 Text(label).font(.caption).foregroundStyle(.secondary)
@@ -139,38 +241,57 @@ struct PilesView: View {
         .disabled(pile.isEmpty)
     }
 
+    private func section(_ lang: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(lang, systemImage: "globe").font(.headline)
+                Spacer()
+                Button("5 cards") { mode = .cards(Store.weightedPick(from: pool(lang), count: 5)) }
+                Button { mode = .endless(lang) } label: { Label("Endless", systemImage: "infinity") }
+            }
+            HStack(spacing: 8) {
+                ForEach(Self.piles, id: \.0) { p in chip(lang, p.0, p.1, p.2) }
+            }
+        }
+    }
+
     var body: some View {
         Group {
-            if let cards = reviewing {
-                SessionView(cards: cards) { reviewing = nil }
-            } else if store.cards.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "square.stack.3d.up.slash")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                    Text("Sync from Notes to get started")
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        ForEach(store.languages, id: \.self) { lang in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label(lang, systemImage: "globe").font(.headline)
-                                HStack(spacing: 8) {
-                                    ForEach(Self.piles, id: \.0) { p in
-                                        chip(lang, p.0, p.1, p.2)
-                                    }
-                                }
-                            }
-                        }
+            switch mode {
+            case .cards(let cards):
+                SessionView(cards: cards) { mode = .browse }
+            case .endless(let lang):
+                EndlessView(language: lang) { mode = .browse }
+            case .browse:
+                if store.cards.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "square.stack.3d.up.slash")
+                            .font(.largeTitle)
+                            .foregroundStyle(.secondary)
+                        Text("No cards yet").font(.headline)
+                        Button("Sync from Notes…", action: onSync).buttonStyle(.borderedProminent)
                     }
-                    .padding(20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    VStack(spacing: 0) {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 24) {
+                                ForEach(store.languages, id: \.self) { lang in section(lang) }
+                            }
+                            .padding(20)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        Divider()
+                        HStack {
+                            Button("Sync from Notes…", action: onSync)
+                            Spacer()
+                            Text("\(store.cards.count) cards").font(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(12)
+                    }
                 }
             }
         }
-        .frame(width: 480, height: 560)
+        .frame(minWidth: 520, minHeight: 560)
     }
 }
 
@@ -185,7 +306,7 @@ struct FolderPickerView: View {
         VStack(spacing: 12) {
             Label("Choose deck folders", systemImage: "folder.badge.gearshape")
                 .font(.headline)
-            Text("Each folder becomes a language deck.")
+            Text("Each note inside becomes a language deck (note title = language).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             List(allFolders, id: \.self) { f in
