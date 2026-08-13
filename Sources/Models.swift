@@ -18,11 +18,14 @@ final class Store: ObservableObject {
     @Published var cards: [Card] = []
     @Published var selectedLanguage: String?
     @Published var deckFolders: [String] = []
+    /// Wake popup language: nil = ask each time, "" = mix all, else that language.
+    @Published var wakeLanguage: String?
 
     private struct State: Codable {
         var cards: [Card]
         var selectedLanguage: String?
         var deckFolders: [String]
+        var wakeLanguage: String?
     }
 
     private static let url = FileManager.default
@@ -35,11 +38,13 @@ final class Store: ObservableObject {
             cards = s.cards
             selectedLanguage = s.selectedLanguage
             deckFolders = s.deckFolders
+            wakeLanguage = s.wakeLanguage
         }
     }
 
     private func save() {
-        let s = State(cards: cards, selectedLanguage: selectedLanguage, deckFolders: deckFolders)
+        let s = State(cards: cards, selectedLanguage: selectedLanguage,
+                      deckFolders: deckFolders, wakeLanguage: wakeLanguage)
         try? FileManager.default.createDirectory(at: Self.url.deletingLastPathComponent(),
                                                  withIntermediateDirectories: true)
         try? JSONEncoder().encode(s).write(to: Self.url)
@@ -86,6 +91,11 @@ final class Store: ObservableObject {
 
     func setSelectedLanguage(_ l: String?) {
         selectedLanguage = l
+        save()
+    }
+
+    func setWakeLanguage(_ l: String?) {
+        wakeLanguage = l
         save()
     }
 
