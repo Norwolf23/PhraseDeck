@@ -222,37 +222,104 @@ struct HomeView: View {
     @State private var mode: Mode = .browse
 
     private static let piles: [(String, Confidence, Color)] = [
-        ("High", .high, .green), ("Medium", .medium, .yellow),
-        ("Low", .low, .red), ("New", .unrated, .gray),
+        ("High", .high, Color(red: 0.36, green: 0.72, blue: 0.44)),
+        ("Medium", .medium, Color(red: 0.93, green: 0.76, blue: 0.30)),
+        ("Low", .low, Color(red: 0.91, green: 0.42, blue: 0.42)),
+        ("New", .unrated, Color(red: 0.55, green: 0.62, blue: 0.72)),
     ]
 
     private func chip(_ lang: String, _ label: String, _ c: Confidence, _ tint: Color) -> some View {
         let pile = store.cards(language: lang, confidence: c)
         return Button { mode = .cards(pile.shuffled()) } label: {
-            VStack(spacing: 2) {
-                Text("\(pile.count)").font(.title3.bold())
-                Text(label).font(.caption).foregroundStyle(.secondary)
+            VStack(spacing: 3) {
+                Text("\(pile.count)")
+                    .font(.system(.title2, design: .rounded).bold())
+                    .foregroundStyle(pile.isEmpty ? AnyShapeStyle(.tertiary) : AnyShapeStyle(tint))
+                    .contentTransition(.numericText())
+                Text(label.uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(tint.opacity(pile.isEmpty ? 0.08 : 0.2), in: RoundedRectangle(cornerRadius: 10))
+            .padding(.vertical, 12)
+            .background(tint.opacity(pile.isEmpty ? 0.06 : 0.14), in: RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
         .disabled(pile.isEmpty)
     }
 
-    private func section(_ lang: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label(lang, systemImage: "globe").font(.headline)
-                Spacer()
-                Button("5 cards") { mode = .cards(Store.weightedPick(from: pool(lang), count: 5)) }
-                Button { mode = .endless(lang) } label: { Label("Endless", systemImage: "infinity") }
+    /// Thin segmented bar showing the confidence mix of a deck.
+    private func progressBar(_ lang: String) -> some View {
+        let counts = Self.piles.map { (store.cards(language: lang, confidence: $0.1).count, $0.2) }
+        let total = max(counts.reduce(0) { $0 + $1.0 }, 1)
+        return GeometryReader { geo in
+            HStack(spacing: 2) {
+                ForEach(Array(counts.enumerated()), id: \.offset) { _, seg in
+                    if seg.0 > 0 {
+                        seg.1.frame(width: max(geo.size.width * CGFloat(seg.0) / CGFloat(total) - 2, 3))
+                    }
+                }
             }
+        }
+        .frame(height: 5)
+        .clipShape(Capsule())
+    }
+
+    private func section(_ lang: String) -> some View {
+        let deck = pool(lang)
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(lang).font(.title3.bold())
+                Text("\(deck.count) cards").font(.caption).foregroundStyle(.tertiary)
+                Spacer()
+                Button {
+                    mode = .cards(Store.weightedPick(from: deck, count: 5))
+                } label: {
+                    Label("Review 5", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                Button { mode = .endless(lang) } label: { Label("Endless", systemImage: "infinity") }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+            progressBar(lang)
             HStack(spacing: 8) {
                 ForEach(Self.piles, id: \.0) { p in chip(lang, p.0, p.1, p.2) }
             }
         }
+        .padding(18)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "rectangle.stack.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(
+                    LinearGradient(colors: [Color(red: 0.45, green: 0.55, blue: 0.95),
+                                            Color(red: 0.65, green: 0.45, blue: 0.90)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 9))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("PhraseDeck").font(.title3.bold())
+                Text("\(store.cards.count) cards · \(store.languages.count) languages")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                onSync()
+            } label: {
+                Label("Sync from Notes", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .controlSize(.regular)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
     }
 
     var body: some View {
@@ -264,29 +331,30 @@ struct HomeView: View {
                 EndlessView(language: lang) { mode = .browse }
             case .browse:
                 if store.cards.isEmpty {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 14) {
                         Image(systemName: "square.stack.3d.up.slash")
-                            .font(.largeTitle)
+                            .font(.system(size: 40))
+                            .foregroundStyle(.tertiary)
+                        Text("No cards yet").font(.title3.bold())
+                        Text("Make a checklist of phrase pairs in Apple Notes,\nthen sync it here.")
+                            .font(.callout)
                             .foregroundStyle(.secondary)
-                        Text("No cards yet").font(.headline)
-                        Button("Sync from Notes…", action: onSync).buttonStyle(.borderedProminent)
+                            .multilineTextAlignment(.center)
+                        Button("Sync from Notes…", action: onSync)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                            .padding(.top, 6)
                     }
                 } else {
                     VStack(spacing: 0) {
+                        header
+                        Divider()
                         ScrollView {
-                            VStack(alignment: .leading, spacing: 24) {
+                            VStack(spacing: 14) {
                                 ForEach(store.languages, id: \.self) { lang in section(lang) }
                             }
                             .padding(20)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        Divider()
-                        HStack {
-                            Button("Sync from Notes…", action: onSync)
-                            Spacer()
-                            Text("\(store.cards.count) cards").font(.caption).foregroundStyle(.secondary)
-                        }
-                        .padding(12)
                     }
                 }
             }

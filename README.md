@@ -25,3 +25,7 @@ gracias : thank you
 Only **checklist or bullet lines** (the little circle/dot items) become cards — plain text lines are ignored, so you can keep staging words in the same note. A line becomes a card when it splits on the first ` – `, ` — `, ` - `, ` : `, or `=` (en/em dashes also work without surrounding spaces).
 
 Sync is manual: menu bar icon → **Sync from Notes…**, tick the folders that are decks.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
