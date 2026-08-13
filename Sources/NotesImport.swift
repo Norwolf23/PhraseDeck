@@ -34,20 +34,32 @@ enum NotesImport {
             let d = try run("""
             tell application "Notes"
                 set f to folder "\(escaped)"
-                get {name of every note of f, plaintext of every note of f}
+                get {name of every note of f, body of every note of f}
             end tell
             """)
             let names = d.atIndex(1).map(strings) ?? []
             let bodies = d.atIndex(2).map(strings) ?? []
             for (name, body) in zip(names, bodies) {
-                let language = name.trimmingCharacters(in: .whitespaces)
-                // First plaintext line is the note title — never a card.
-                for line in body.split(whereSeparator: \.isNewline).dropFirst() {
-                    if let card = parseLine(String(line), language: language) { out.append(card) }
-                }
+                out += cards(fromBody: body, language: name.trimmingCharacters(in: .whitespaces))
             }
         }
         return out
+    }
+
+    /// Only checklist/bullet items (<li> in the note's HTML body) become cards;
+    /// plain lines are staging text and are ignored.
+    static func cards(fromBody body: String, language: String) -> [Card] {
+        body.matches(of: #/<li[^>]*>(.*?)</li>/#).compactMap { m in
+            let text = String(m.1)
+                .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                .replacingOccurrences(of: "&nbsp;", with: " ")
+                .replacingOccurrences(of: "&lt;", with: "<")
+                .replacingOccurrences(of: "&gt;", with: ">")
+                .replacingOccurrences(of: "&quot;", with: "\"")
+                .replacingOccurrences(of: "&apos;", with: "'")
+                .replacingOccurrences(of: "&amp;", with: "&")
+            return parseLine(text, language: language)
+        }
     }
 
     /// Splits on the first occurrence of a separator, spaced forms first;

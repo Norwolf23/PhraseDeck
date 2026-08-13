@@ -23,6 +23,17 @@ struct TestParser {
         let d = NotesImport.parseLine("Cute = süßi", language: "Südtirolerisch")
         check(d?.phrase == "Cute" && d?.translation == "süßi", "equals split")
 
+        let body = """
+        <div><b><h1>Südtirolerisch</h1></b></div>
+        <ul>
+        <li>Cute = <b>süßi</b></li>
+        <li>no separator here</li>
+        </ul>
+        <div>Passt! = Alright!</div>
+        """
+        let f = NotesImport.cards(fromBody: body, language: "Südtirolerisch")
+        check(f.count == 1 && f[0].phrase == "Cute" && f[0].translation == "süßi", "only <li> lines become cards, tags stripped (got \(f.count))")
+
         let e1 = Card(language: "it", phrase: "Are you", translation: "Stai", confidence: .unrated)
         let e2 = Card(language: "it", phrase: "Are you", translation: "Sei", confidence: .unrated)
         check(e1.id != e2.id, "same phrase, different translation = distinct cards")
