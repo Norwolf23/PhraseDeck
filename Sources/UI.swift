@@ -131,6 +131,9 @@ private func pool(_ language: String?) -> [Card] {
 // MARK: - SessionLauncherView (choose a language, then 5 cards)
 
 struct SessionLauncherView: View {
+    /// true for the automatic wake/unlock popup — honors the wake language
+    /// setting; manual "Review 5 Now" always asks.
+    var auto: Bool = false
     let onDone: () -> Void
     @State private var cards: [Card]?
 
@@ -153,7 +156,13 @@ struct SessionLauncherView: View {
             }
             .padding(24)
             .frame(width: 260)
-            .onAppear { if Store.shared.languages.count < 2 { start(nil) } }
+            .onAppear {
+                if auto, let wl = Store.shared.wakeLanguage {
+                    start(wl.isEmpty ? nil : wl)
+                } else if Store.shared.languages.count < 2 {
+                    start(nil)
+                }
+            }
         }
     }
 
@@ -317,6 +326,23 @@ struct HomeView: View {
                 Label("Sync from Notes", systemImage: "arrow.triangle.2.circlepath")
             }
             .controlSize(.regular)
+            Menu {
+                Picker("Wake language", selection: Binding(
+                    get: { store.wakeLanguage },
+                    set: { store.setWakeLanguage($0) }
+                )) {
+                    Text("Ask each time").tag(String?.none)
+                    Text("Mix all languages").tag(String?.some(""))
+                    Divider()
+                    ForEach(store.languages, id: \.self) { Text($0).tag(String?.some($0)) }
+                }
+                .pickerStyle(.inline)
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Which language the wake-up popup uses")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)

@@ -35,7 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("com.apple.screenIsUnlocked"), object: nil, queue: .main
         ) { _ in WindowManager.shared.triggerSession() }
-        WindowManager.shared.openSession()
+        WindowManager.shared.openSession(auto: true)
     }
 
     /// Dock icon click reopens the home window.
@@ -58,10 +58,10 @@ final class WindowManager: NSObject, NSWindowDelegate {
     /// Wake/unlock path: debounced so wake + unlock don't double-fire.
     func triggerSession() {
         if let last = lastSessionOpened, Date().timeIntervalSince(last) < 60 { return }
-        openSession()
+        openSession(auto: true)
     }
 
-    func openSession() {
+    func openSession(auto: Bool = false) {
         if let w = sessionWindow { front(w); return }
         guard !Store.shared.cards.isEmpty else {
             alert("No cards yet", "Use “Sync from Notes…” in the menu bar to import your phrase lists.")
@@ -77,7 +77,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
-        panel.contentView = NSHostingView(rootView: SessionLauncherView(onDone: { [weak self] in
+        panel.contentView = NSHostingView(rootView: SessionLauncherView(auto: auto, onDone: { [weak self] in
             self?.sessionWindow?.close()
         }))
         panel.delegate = self
