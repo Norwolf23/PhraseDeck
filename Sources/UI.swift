@@ -226,6 +226,7 @@ struct EndlessView: View {
 struct HomeView: View {
     let onSync: () -> Void
     @ObservedObject private var store = Store.shared
+    @ObservedObject private var pomo = Pomodoro.shared
 
     private enum Mode { case browse, cards([Card]), endless(String?) }
     @State private var mode: Mode = .browse
@@ -337,15 +338,64 @@ struct HomeView: View {
                     ForEach(store.languages, id: \.self) { Text($0).tag(String?.some($0)) }
                 }
                 .pickerStyle(.inline)
+                Divider()
+                Picker("Work length", selection: Binding(
+                    get: { store.workMinutes },
+                    set: { store.setWorkMinutes($0) }
+                )) {
+                    ForEach([15, 25, 30, 45, 50, 60, 90], id: \.self) { Text("\($0) min").tag($0) }
+                }
+                Picker("Break length", selection: Binding(
+                    get: { store.breakMinutes },
+                    set: { store.setBreakMinutes($0) }
+                )) {
+                    ForEach([5, 10, 15, 20, 30], id: \.self) { Text("\($0) min").tag($0) }
+                }
+                Toggle("Open 5 new cards at break", isOn: Binding(
+                    get: { store.openCardsOnBreak },
+                    set: { store.setOpenCardsOnBreak($0) }
+                ))
             } label: {
                 Image(systemName: "gearshape")
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("Which language the wake-up popup uses")
+            .help("Wake-up popup and pomodoro settings")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
+    }
+
+    private var pomodoroBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "timer")
+                .foregroundStyle(pomo.phase == .rest ? .green : .orange)
+            if pomo.isRunning {
+                Text(pomo.phase == .work ? "Working" : "Break")
+                    .font(.callout.weight(.semibold))
+                Text(pomo.clock)
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(pomo.paused ? "Resume" : "Pause") { pomo.togglePause() }
+                    .controlSize(.small)
+                Button(pomo.phase == .work ? "Skip to Break" : "Skip to Work") { pomo.skip() }
+                    .controlSize(.small)
+                Button("Stop") { pomo.stop() }
+                    .controlSize(.small)
+            } else {
+                Text("Pomodoro · \(store.workMinutes) min work / \(store.breakMinutes) min break")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Start") { pomo.start() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(.quaternary.opacity(0.25))
     }
 
     var body: some View {
@@ -374,6 +424,7 @@ struct HomeView: View {
                 } else {
                     VStack(spacing: 0) {
                         header
+                        pomodoroBar
                         Divider()
                         ScrollView {
                             VStack(spacing: 14) {

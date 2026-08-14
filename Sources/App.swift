@@ -4,12 +4,22 @@ import ServiceManagement
 @main
 struct PhraseDeckApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @ObservedObject private var pomo = Pomodoro.shared
 
     var body: some Scene {
-        MenuBarExtra("PhraseDeck", systemImage: "rectangle.on.rectangle.angled") {
+        MenuBarExtra {
             Button("Review 5 Now") { WindowManager.shared.openSession() }
             Button("Open PhraseDeck") { WindowManager.shared.openHome() }
             Button("Sync from Notes…") { WindowManager.shared.startSync() }
+            Divider()
+            if pomo.isRunning {
+                Text(pomo.phase == .work ? "Working — \(pomo.clock)" : "Break — \(pomo.clock)")
+                Button(pomo.paused ? "Resume" : "Pause") { pomo.togglePause() }
+                Button(pomo.phase == .work ? "Skip to Break" : "Skip to Work") { pomo.skip() }
+                Button("Stop Pomodoro") { pomo.stop() }
+            } else {
+                Button("Start Pomodoro") { pomo.start() }
+            }
             Toggle("Launch at Login", isOn: Binding(
                 get: { SMAppService.mainApp.status == .enabled },
                 set: { enable in
@@ -23,6 +33,13 @@ struct PhraseDeckApp: App {
             ))
             Divider()
             Button("Quit") { NSApp.terminate(nil) }
+        } label: {
+            if pomo.isRunning {
+                Text((pomo.paused ? "⏸ " : "") + pomo.clock)
+                    .monospacedDigit()
+            } else {
+                Image(systemName: "rectangle.on.rectangle.angled")
+            }
         }
     }
 }
@@ -67,6 +84,22 @@ final class WindowManager: NSObject, NSWindowDelegate {
             alert("No cards yet", "Use “Sync from Notes…” in the menu bar to import your phrase lists.")
             return
         }
+        presentSession(SessionLauncherView(auto: auto, onDone: { [weak self] in
+            self?.sessionWindow?.close()
+        }))
+    }
+
+    /// Pomodoro break: skip the language prompt, go straight to 5 new-first cards.
+    func openBreakSession() {
+        if let w = sessionWindow { front(w); return }
+        let cards = Store.shared.pickBreakCards(count: 5)
+        guard !cards.isEmpty else { return }
+        presentSession(SessionView(cards: cards, onDone: { [weak self] in
+            self?.sessionWindow?.close()
+        }))
+    }
+
+    private func presentSession<V: View>(_ root: V) {
         lastSessionOpened = Date()
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 500, height: 430),
@@ -77,9 +110,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
-        panel.contentView = NSHostingView(rootView: SessionLauncherView(auto: auto, onDone: { [weak self] in
-            self?.sessionWindow?.close()
-        }))
+        panel.contentView = NSHostingView(rootView: root)
         panel.delegate = self
         panel.center()
         sessionWindow = panel
