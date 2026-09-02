@@ -5,10 +5,10 @@ Menu-bar Mac flashcard app. Every time your Mac wakes or unlocks, it pops a floa
 ## Build & install
 
 ```sh
-./build.sh
-cp -R build/PhraseDeck.app /Applications/
-open /Applications/PhraseDeck.app
+xcodegen generate && xcodebuild -scheme PhraseDeck -configuration Release build
 ```
+
+The app is sandboxed (Mac App Store build); data lives in the app container, so phrases synced with the old unsandboxed `build.sh` build (`~/Library/Application Support/PhraseDeck`) are not migrated — just re-sync from Notes.
 
 First sync will ask permission to control Notes — allow it (fixable later under System Settings → Privacy & Security → Automation).
 
