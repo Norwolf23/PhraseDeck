@@ -5,7 +5,8 @@ cd "$(dirname "$0")"
 
 APP=build/PhraseDeck.app
 rm -rf build
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+cp AppIcon.icns "$APP/Contents/Resources/"
 
 echo "Compiling…"
 swiftc -O -parse-as-library Sources/*.swift -o "$APP/Contents/MacOS/PhraseDeck"
@@ -18,6 +19,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleExecutable</key><string>PhraseDeck</string>
     <key>CFBundleIdentifier</key><string>com.gustav.phrasedeck</string>
     <key>CFBundleName</key><string>PhraseDeck</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.0</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
