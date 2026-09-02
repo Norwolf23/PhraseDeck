@@ -4,22 +4,22 @@ import ServiceManagement
 @main
 struct PhraseDeckApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @ObservedObject private var store = Store.shared
+    @ObservedObject private var pomo = Pomodoro.shared
 
     var body: some Scene {
-        MenuBarExtra("PhraseDeck", systemImage: "rectangle.on.rectangle.angled") {
+        MenuBarExtra {
             Button("Review 5 Now") { WindowManager.shared.openSession() }
-            Picker("Language", selection: Binding(
-                get: { store.selectedLanguage },
-                set: { store.setSelectedLanguage($0) }
-            )) {
-                Text("All Languages").tag(String?.none)
-                ForEach(store.languages, id: \.self) { lang in
-                    Text(lang).tag(String?.some(lang))
-                }
-            }
-            Button("Piles…") { WindowManager.shared.openPiles() }
+            Button("Open PhraseDeck") { WindowManager.shared.openHome() }
             Button("Sync from Notes…") { WindowManager.shared.startSync() }
+            Divider()
+            if pomo.isRunning {
+                Text(pomo.phase == .work ? "Working — \(pomo.clock)" : "Break — \(pomo.clock)")
+                Button(pomo.paused ? "Resume" : "Pause") { pomo.togglePause() }
+                Button(pomo.phase == .work ? "Skip to Break" : "Skip to Work") { pomo.skip() }
+                Button("Stop Pomodoro") { pomo.stop() }
+            } else {
+                Button("Start Pomodoro") { pomo.start() }
+            }
             Toggle("Launch at Login", isOn: Binding(
                 get: { SMAppService.mainApp.status == .enabled },
                 set: { enable in
@@ -33,6 +33,13 @@ struct PhraseDeckApp: App {
             ))
             Divider()
             Button("Quit") { NSApp.terminate(nil) }
+        } label: {
+            if pomo.isRunning {
+                Text((pomo.paused ? "⏸ " : "") + pomo.clock)
+                    .monospacedDigit()
+            } else {
+                Image(systemName: "rectangle.on.rectangle.angled")
+            }
         }
     }
 }
@@ -45,7 +52,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("com.apple.screenIsUnlocked"), object: nil, queue: .main
         ) { _ in WindowManager.shared.triggerSession() }
-        WindowManager.shared.openSession()
+        WindowManager.shared.openSession(auto: true)
+    }
+
+    /// Dock icon click reopens the home window.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        WindowManager.shared.openHome()
+        return true
     }
 }
 
@@ -62,19 +75,34 @@ final class WindowManager: NSObject, NSWindowDelegate {
     /// Wake/unlock path: debounced so wake + unlock don't double-fire.
     func triggerSession() {
         if let last = lastSessionOpened, Date().timeIntervalSince(last) < 60 { return }
-        openSession()
+        openSession(auto: true)
     }
 
-    func openSession() {
+    func openSession(auto: Bool = false) {
         if let w = sessionWindow { front(w); return }
-        let cards = Store.shared.pickSession(count: 5)
-        guard !cards.isEmpty else {
+        guard !Store.shared.cards.isEmpty else {
             alert("No cards yet", "Use “Sync from Notes…” in the menu bar to import your phrase lists.")
             return
         }
+        presentSession(SessionLauncherView(auto: auto, onDone: { [weak self] in
+            self?.sessionWindow?.close()
+        }))
+    }
+
+    /// Pomodoro break: skip the language prompt, go straight to 5 new-first cards.
+    func openBreakSession() {
+        if let w = sessionWindow { front(w); return }
+        let cards = Store.shared.pickBreakCards(count: 5)
+        guard !cards.isEmpty else { return }
+        presentSession(SessionView(cards: cards, onDone: { [weak self] in
+            self?.sessionWindow?.close()
+        }))
+    }
+
+    private func presentSession<V: View>(_ root: V) {
         lastSessionOpened = Date()
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 380, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 430),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false
@@ -82,26 +110,24 @@ final class WindowManager: NSObject, NSWindowDelegate {
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
-        panel.contentView = NSHostingView(rootView: SessionView(cards: cards, onDone: { [weak self] in
-            self?.sessionWindow?.close()
-        }))
+        panel.contentView = NSHostingView(rootView: root)
         panel.delegate = self
         panel.center()
         sessionWindow = panel
         front(panel)
     }
 
-    // MARK: - Piles
+    // MARK: - Home
 
-    func openPiles() {
+    func openHome() {
         if let w = pilesWindow { front(w); return }
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 540),
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 620),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
         win.isReleasedWhenClosed = false
-        win.title = "Piles"
-        win.contentView = NSHostingView(rootView: PilesView())
+        win.title = "PhraseDeck"
+        win.contentView = NSHostingView(rootView: HomeView(onSync: { [weak self] in self?.startSync() }))
         win.delegate = self
         win.center()
         pilesWindow = win

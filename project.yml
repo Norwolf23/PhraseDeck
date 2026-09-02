@@ -1,0 +1,38 @@
+name: PhraseDeck
+options:
+  bundleIdPrefix: studio.nickson
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "26.3"
+targets:
+  PhraseDeck:
+    type: application
+    platform: macOS
+    sources:
+      - Sources
+      - Assets.xcassets
+    info:
+      path: Info.plist
+      properties:
+        NSAppleEventsUsageDescription: PhraseDeck reads your phrase lists from Apple Notes.
+        LSApplicationCategoryType: public.app-category.education
+        ITSAppUsesNonExemptEncryption: false
+        NSHumanReadableCopyright: "© 2026 Nickson Studio"
+    entitlements:
+      path: PhraseDeck.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.automation.apple-events: true
+        com.apple.security.temporary-exception.apple-events:
+          - com.apple.Notes
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: studio.nickson.phrasedeck
+      DEVELOPMENT_TEAM: 6272CRNH9G
+      CODE_SIGN_STYLE: Automatic
+      MARKETING_VERSION: "1.0"
+      CURRENT_PROJECT_VERSION: 1
+      ENABLE_HARDENED_RUNTIME: YES
+      ENABLE_APP_SANDBOX: YES
+      GENERATE_INFOPLIST_FILE: YES
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      SWIFT_VERSION: "5.0"

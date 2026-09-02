@@ -5,10 +5,10 @@ Menu-bar Mac flashcard app. Every time your Mac wakes or unlocks, it pops a floa
 ## Build & install
 
 ```sh
-./build.sh
-cp -R build/PhraseDeck.app /Applications/
-open /Applications/PhraseDeck.app
+xcodegen generate && xcodebuild -scheme PhraseDeck -configuration Release build
 ```
+
+The app is sandboxed (Mac App Store build); data lives in the app container, so phrases synced with the old unsandboxed `build.sh` build (`~/Library/Application Support/PhraseDeck`) are not migrated — just re-sync from Notes.
 
 First sync will ask permission to control Notes — allow it (fixable later under System Settings → Privacy & Security → Automation).
 
@@ -22,6 +22,10 @@ la cuenta, por favor - the check, please
 gracias : thank you
 ```
 
-A line becomes a card when it splits on the first ` – `, ` — `, ` - `, or ` : ` (en/em dashes also work without surrounding spaces). Everything else is ignored.
+Only **checklist or bullet lines** (the little circle/dot items) become cards — plain text lines are ignored, so you can keep staging words in the same note. A line becomes a card when it splits on the first ` – `, ` — `, ` - `, ` : `, or `=` (en/em dashes also work without surrounding spaces).
 
 Sync is manual: menu bar icon → **Sync from Notes…**, tick the folders that are decks.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
